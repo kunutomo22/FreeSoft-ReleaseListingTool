@@ -1,0 +1,2 @@
+# FreeSoft-ReleaseListingTool OutputFolder
+ファイル出力モードを有効にした際に、リリース情報がまとまったファイルをここに出力します。

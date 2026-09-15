@@ -1,0 +1,14 @@
+#ToolName
+#拡張ツールの名前
+#
+#ToolFileName
+#拡張ツールのファイル名
+#
+#GetInfo
+#GitHubのリポジトリのURL
+#
+#GetApi
+#releases:releasesエンドポイントから情報を取得する
+#tags:tagsエンドポイントから情報を取得する※バージョン情報のみ取得
+ToolName,ToolFileName
+WinSCP-ScrapeTool,WinSCPScrape.ps1
