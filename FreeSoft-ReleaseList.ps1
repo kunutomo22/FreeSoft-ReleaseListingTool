@@ -15,6 +15,7 @@ $MyCommonFilePath = Join-Path -Path $MyCommonFolderPath -ChildPath "Common.ps1" 
 .$MyCommonFilePath #共通関数読み込み
 $MySettingFilePath = Join-Path -Path $MyParentPath -ChildPath "Setting.txt" #設定ファイルパス
 $GetTypeListFilePath = Join-Path -Path $MyParentPath -ChildPath "GetTypeList.csv" #取得タイプリストファイルパス
+$GithubRatelimitAPIURL = "https://api.github.com/rate_limit"
 
 #アセンブリ読み込み
 Add-Type -AssemblyName System.Windows.Forms
@@ -147,8 +148,36 @@ try{
 	foreach($GetTypeObject in $GetTypeListObject){
 		Logger -Level "None" -Message ($GetTypeObject.SoftName + "の情報取得") -LogLevel $LogLevel -Popup $Popup
 		$ApiUrl = $GetTypeObject.GetInfo.Replace("/github.com","/api.github.com/repos") + "/" + $GetTypeObject.GetApi
-		$RequestReturnObject = Simple-WebRequest -URL $ApiUrl
-		$RequestReturnContentObject = $RequestReturnObject.Content | ConvertFrom-Json
+		$ApiFailFlag = $false
+		try{
+			$RequestReturnObject = Simple-WebRequest -URL $ApiUrl
+		}catch{
+			#github-api制限に引っかかったら
+			$ApiFailFlag = !$ApiFailFlag
+			$RequestReturnObject = Simple-WebRequest -URL $GithubRatelimitAPIURL
+		}finally{
+			$RequestReturnContentObject = $RequestReturnObject.Content | ConvertFrom-Json
+		}
+		#$RequestReturnObject = Simple-WebRequest -URL $ApiUrl
+		#$RequestReturnContentObject = $RequestReturnObject.Content | ConvertFrom-Json
+		if($ApiFailFlag){
+			Logger -Level Error -Message "GithubAPIの制限を超えています" -LogLevel $LogLevel -Popup $Popup
+			$LimitTime = [System.DateTimeOffset]::FromUnixTimeSeconds($RequestReturnContentObject.rate.reset).LocalDateTime | Get-Date
+			$LimitTimeStamp = [System.DateTimeOffset]::FromUnixTimeSeconds($RequestReturnContentObject.rate.reset).LocalDateTime | Get-Date -Format $TimeFormat
+			Logger -Level Error -Message ("制限解除時間 [" + $LimitTimeStamp + "]") -LogLevel $LogLevel -Popup $Popup
+			Logger -Level Warning -Message ($GetTypeObject.SoftName + "の情報取得にてGithubAPI実行制限を超えました。リストファイルに記載できません。") -LogLevel $LogLevel -Popup $Popup
+			$YesOrNo = "No"
+			$YesOrNo = Logger -Level Question -Title "GithubAPIの制限対応" -Message ("Yes:" + $LimitTimeStamp + "までツール内で待機`r`nNo:" + $GetTypeObject.SoftName + "の情報はリストファイルに記載せず続行する") -LogLevel $LogLevel -Popup $Popup
+			if($YesOrNo -eq "No"){
+				continue
+			}else{
+				Logger -Level Warning -Message "制限解除まで待機中" -LogLevel $LogLevel -Popup $Popup
+				Start-Sleep -Milliseconds (($LimitTime - (Get-Date)).TotalMilliseconds + 10000)
+				Logger -Message "待機完了" -LogLevel $LogLevel -Popup $Popup
+				$RequestReturnObject = Simple-WebRequest -URL $ApiUrl
+				$RequestReturnContentObject = $RequestReturnObject.Content | ConvertFrom-Json
+			}
+		}
 		foreach($ReleaseObject in $RequestReturnContentObject){
 			switch($GetTypeObject.GetApi){
 				"releases"{
